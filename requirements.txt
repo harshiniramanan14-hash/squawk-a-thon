@@ -1,0 +1,8 @@
+streamlit
+crewai
+langchain
+langchain-groq
+langchain-huggingface
+faiss-cpu
+python-dotenv
+litellm
