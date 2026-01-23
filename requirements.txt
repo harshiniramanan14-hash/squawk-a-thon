@@ -1,5 +1,9 @@
 streamlit
 crewai
+langchain-google-genai
+google-generativeai
+python-dotenv
+pillow
 langchain
 langchain-groq
 langchain-huggingface
