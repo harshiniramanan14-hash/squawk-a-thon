@@ -3,10 +3,11 @@ langchain
 langchain-community
 langchain-huggingface
 faiss-cpu
-sentence-transformers
-huggingface-hub
 python-dotenv
 crewai
 litellm
-pydub
+huggingface_hub
+pypdf
 opencv-python
+whisper
+numpy
