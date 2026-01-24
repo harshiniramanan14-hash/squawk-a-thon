@@ -59,17 +59,17 @@ if st.button("Analyze 🧠"):
         st.warning("Please describe the issue.")
     else:
         with st.spinner("Consulting the flock..."):
-          try:
-    context = get_rag_context(query)
-except ValueError as e:
-    st.warning(str(e))
-    context = "No research documents available. Answer based on general avian knowledge."
+            try:
+                context = get_rag_context(query)
+            except ValueError as e:
+                st.warning(str(e))
+                context = "No research documents available. Answer based on general avian knowledge."
 
-response = crew_ai_response(
-    query + "\n\nRelevant Research Context:\n" + context,
-    breed
-)
-
+            response = crew_ai_response(
+                query + "\n\nRelevant Research Context:\n" + context,
+                breed
+            )
 
         st.success("Analysis Complete")
         st.markdown(response)
+
