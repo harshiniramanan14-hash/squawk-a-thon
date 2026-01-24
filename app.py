@@ -37,14 +37,14 @@ st.markdown("""
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
     # Exact filename provided in your prompt
-    logo_path = "ChatGPT Image Jan 23, 2026, 07_37_38 PM.jpg"
+    logo_path = "logo.png"
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     st.markdown('<h1 class="main-title">🌿 Squawk-A-Thon</h1>', unsafe_allow_html=True)
 
 # --- 4. MULTIMODAL DIAGNOSTIC ---
 st.write("### 🏥 Specialist Avian Consultation")
-breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie"])
+breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie","cockatoo","other"])
 query = st.text_area("Describe the concern (e.g., lethargy, feather plucking, respiratory sound):")
 
 # Feature: Picture, Audio, and Video Support
@@ -88,3 +88,4 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
             st.markdown('</div>', unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Analysis Failed: {e}")
+
