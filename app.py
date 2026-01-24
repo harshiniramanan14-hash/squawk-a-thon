@@ -47,7 +47,7 @@ with col2:
 
 # --- 4. INPUTS ---
 st.write("### 🏥 Specialist Diagnostic Center")
-breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie"])
+breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie","cockatoo","other"])
 query = st.text_area("Describe the concern (e.g., lethargy, tail bobbing):")
 
 # Media Uploads
@@ -96,3 +96,4 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
                 st.error(f"Logic Error: {e}. Check if brain.py is correctly set up.")
 
 st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
+
