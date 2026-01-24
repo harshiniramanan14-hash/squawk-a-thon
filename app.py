@@ -1,11 +1,13 @@
 import streamlit as st
 from brain import get_rag_context, crew_ai_response
 
+
 st.set_page_config(
     page_title="Squawk-A-Thon 🦜",
     page_icon="🦜",
     layout="wide"
 )
+
 
 # ---------- UI STYLING ----------
 st.markdown("""
@@ -19,6 +21,7 @@ h1, h2, h3, p, label {
 </style>
 """, unsafe_allow_html=True)
 
+
 # ---------- HEADER ----------
 st.image(
     "assets/ChatGPT Image Jan 23, 2026, 07_37_38 PM.png",
@@ -27,6 +30,7 @@ st.image(
 
 st.title("🦜 Squawk-A-Thon")
 st.caption("AI Assistant for Avian Healthcare & Behavioral Analysis")
+
 
 # ---------- INPUTS ----------
 breed = st.selectbox(
@@ -39,6 +43,7 @@ breed = st.selectbox(
         "Budgerigar",
         "Macaw",
         "Lovebird",
+        "cockatoo",
         "Other"
     ]
 )
@@ -52,6 +57,7 @@ st.subheader("📂 Upload Media (Optional)")
 st.file_uploader("Upload Audio", type=["wav", "mp3"])
 st.file_uploader("Upload Video", type=["mp4", "mov"])
 st.file_uploader("Upload Reports", type=["pdf"], accept_multiple_files=True)
+
 
 # ---------- RUN ----------
 if st.button("Analyze 🧠"):
@@ -72,4 +78,3 @@ if st.button("Analyze 🧠"):
 
         st.success("Analysis Complete")
         st.markdown(response)
-
