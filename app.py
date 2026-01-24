@@ -34,7 +34,7 @@ st.markdown("""
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
     # Fixed Filename logic
-    logo_path = "ChatGPT Image Jan 23, 2026, 07_37_38 PM.jpg"
+    logo_path = "logo.png"
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     st.markdown('<h1 class="main-title">🌿 Squawk-A-Thon</h1>', unsafe_allow_html=True)
@@ -86,3 +86,4 @@ if st.button("RUN OPENAI + VISION DIAGNOSTIC 🌲"):
             st.error(f"Analysis Failed: {e}")
 
 st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
+
