@@ -1,61 +1,62 @@
 import os
 from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.text_splitter import CharacterTextSplitter
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize the ultra-fast Groq LLM
-llm = ChatGroq(
-    temperature=0.2, 
-    model_name="llama3-70b-8192", 
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+# 1. LLM & Embeddings Setup
+llm = ChatGroq(model_name="llama3-70b-8192", groq_api_key=os.getenv("GROQ_API_KEY"))
+hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-class AvianBrain:
-    def __init__(self):
-        # Define Agents
-        self.diagnostician = Agent(
-            role='Avian Pathologist',
-            goal='Analyze bird symptoms and identify potential health risks.',
-            backstory='''You are a world-renowned avian vet. You are expert at spotting 
-            subtle signs of illness in parrots, conures, and small birds. You are 
-            empathetic but highly clinical.''',
-            verbose=True,
-            allow_delegation=False,
+class AvianSpecialistCrew:
+    def __init__(self, vector_store_path="avian_knowledge_db"):
+        self.vector_store_path = vector_store_path
+        
+    def get_retriever_context(self, query):
+        if os.path.exists(self.vector_store_path):
+            db = FAISS.load_local(self.vector_store_path, hf_embeddings, allow_dangerous_deserialization=True)
+            docs = db.similarity_search(query, k=3)
+            return "\n".join([d.page_content for d in docs])
+        return "No specific documents found in the database."
+
+    def run_diagnostic(self, breed, symptoms):
+        context = self.get_retriever_context(f"{breed} {symptoms}")
+        
+        # Agent 1: The Avian Pathologist
+        pathologist = Agent(
+            role='Senior Avian Pathologist',
+            goal=f'Analyze {symptoms} for a {breed} using the provided database context.',
+            backstory='Expert in avian clinical signs and behavior. You translate data into health risks.',
             llm=llm
         )
 
-        self.care_specialist = Agent(
-            role='Avian Care Specialist',
-            goal='Provide immediate first-aid steps and long-term recovery advice.',
-            backstory='''You specialize in avian rehabilitation and nutrition. 
-            You translate complex medical diagnosis into easy-to-follow steps for bird owners.''',
-            verbose=True,
-            allow_delegation=False,
+        # Agent 2: The Behaviorist
+        behaviorist = Agent(
+            role='Avian Ethologist',
+            goal='Interpret behavioral changes and suggest environmental adjustments.',
+            backstory='Specialist in bird psychology and flock dynamics.',
             llm=llm
         )
 
-    def process_request(self, bird_info):
-        # Task 1: Analysis
-        task1 = Task(
-            description=f"Analyze the following bird health concerns: {bird_info}. Identify urgency level.",
-            agent=self.diagnostician,
-            expected_output="A summary of potential issues and an urgency rating (Low/Medium/High)."
+        task = Task(
+            description=f"Context: {context}\nAnalyze this {breed}: {symptoms}. Provide a structured diagnosis.",
+            expected_output="A summary of health risks, behavioral insights, and 3 immediate care steps.",
+            agent=pathologist
         )
 
-        # Task 2: Action Plan
-        task2 = Task(
-            description="Based on the pathologist's findings, provide 3 immediate first-aid steps.",
-            agent=self.care_specialist,
-            expected_output="A bulleted list of 3 actionable steps and 1 dietary recommendation."
-        )
-
-        # Create Crew
-        crew = Crew(
-            agents=[self.diagnostician, self.care_specialist],
-            tasks=[task1, task2],
-            process=Process.sequential
-        )
-
+        crew = Crew(agents=[pathologist, behaviorist], tasks=[task], process=Process.sequential)
         return crew.kickoff()
+
+def update_knowledge_base(text_list, db_path="avian_knowledge_db"):
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.create_documents(text_list)
+    if os.path.exists(db_path):
+        db = FAISS.load_local(db_path, hf_embeddings, allow_dangerous_deserialization=True)
+        db.add_documents(docs)
+    else:
+        db = FAISS.from_documents(docs, hf_embeddings)
+    db.save_local(db_path)
