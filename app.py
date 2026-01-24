@@ -1,7 +1,8 @@
 import streamlit as st
 import os
 import google.generativeai as genai
-from brain import AvianSpecialistCrew, update_db
+from brain import load_rag_chain, crew_ai_response
+
 from PIL import Image
 import tempfile
 
