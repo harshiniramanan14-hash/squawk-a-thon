@@ -9,6 +9,11 @@ load_dotenv()
 
 def load_rag_chain(query):
     # Fixes ImportError by using current LangChain paths
+    HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_TOKEN")
+)
+
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     if os.path.exists("vector_db"):
         db = FAISS.load_local("vector_db", embeddings, allow_dangerous_deserialization=True)
