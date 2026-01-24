@@ -38,7 +38,7 @@ st.markdown("""
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
     # Updated to the correct .jpg extension seen in your file list
-    logo_path = "ChatGPT Image Jan 23, 2026, 07_37_38 PM.jpg"
+    logo_path = "logo.jpg"
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     else:
@@ -103,3 +103,4 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
                 st.error(f"Error: {e}. Check your API keys and internet connection.")
 
 st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
+
