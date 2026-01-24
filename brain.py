@@ -1,81 +1,91 @@
 import os
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.chains import RetrievalQA
+from langchain.llms import HuggingFaceHub
 from crewai import Agent, Task, Crew
-from litellm import completion
 
 load_dotenv()
 
-HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+DATA_PATH = "data/"
+VECTOR_DB_PATH = "vector_db"
 
-# -------------------------------
-# RAG SETUP
-# -------------------------------
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+def build_vector_db():
+    documents = []
 
-def build_vectorstore(docs):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = splitter.split_documents(docs)
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-    return vectorstore
+    for folder in ["clinical_docs", "behavioural_docs"]:
+        path = os.path.join(DATA_PATH, folder)
+        for file in os.listdir(path):
+            if file.endswith(".pdf"):
+                loader = PyPDFLoader(os.path.join(path, file))
+                documents.extend(loader.load())
 
-# -------------------------------
-# CREW AI AGENTS
-# -------------------------------
-avian_vet = Agent(
-    role="Avian Veterinarian",
-    goal="Diagnose and suggest healthcare guidance for birds",
-    backstory="Expert in avian diseases, nutrition, and symptoms.",
-    verbose=True
-)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+    chunks = splitter.split_documents(documents)
 
-avian_behaviorist = Agent(
-    role="Avian Behavior Analyst",
-    goal="Understand bird behavior and emotional state",
-    backstory="Specialist in bird psychology and behavioral patterns.",
-    verbose=True
-)
-
-# -------------------------------
-# MAIN AI LOGIC
-# -------------------------------
-def squawk_ai(query, breed, vectorstore):
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    context_docs = retriever.get_relevant_documents(query)
-    context = "\n".join([doc.page_content for doc in context_docs])
-
-    vet_task = Task(
-        description=f"""
-        Bird Breed: {breed}
-        User Concern: {query}
-
-        Context:
-        {context}
-
-        Give health analysis, causes, and care advice.
-        """,
-        agent=avian_vet
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    behavior_task = Task(
+    db = FAISS.from_documents(chunks, embeddings)
+    db.save_local(VECTOR_DB_PATH)
+
+    return db
+
+def load_rag_chain():
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    db = FAISS.load_local(VECTOR_DB_PATH, embeddings, allow_dangerous_deserialization=True)
+
+    llm = HuggingFaceHub(
+        repo_id="google/flan-t5-large",
+        huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY")
+    )
+
+    return RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=db.as_retriever()
+    )
+
+def crew_ai_response(query, breed):
+    vet_agent = Agent(
+        role="Avian Veterinarian AI",
+        goal="Diagnose and explain avian health & behavioral issues",
+        backstory="Expert in bird medicine, ethology, and welfare",
+        verbose=True
+    )
+
+    behavior_agent = Agent(
+        role="Avian Behavior Specialist",
+        goal="Analyze bird behavior and emotional states",
+        backstory="Studies parrot psychology and environmental stress",
+        verbose=True
+    )
+
+    task = Task(
         description=f"""
         Bird Breed: {breed}
         User Concern: {query}
 
-        Analyze emotional and behavioral patterns.
+        Provide:
+        - Possible causes
+        - Health risks
+        - Behavioral insights
+        - Immediate care tips
+        - When to see a vet
         """,
-        agent=avian_behaviorist
+        expected_output="Clear avian healthcare guidance",
+        agents=[vet_agent, behavior_agent]
     )
 
     crew = Crew(
-        agents=[avian_vet, avian_behaviorist],
-        tasks=[vet_task, behavior_task]
+        agents=[vet_agent, behavior_agent],
+        tasks=[task]
     )
 
-    result = crew.kickoff()
-    return result
+    return crew.kickoff()
