@@ -1,12 +1,10 @@
 streamlit
 crewai
-langchain-google-genai
-google-generativeai
-python-dotenv
-pillow
 langchain
 langchain-groq
+langchain-google-genai
 langchain-huggingface
 faiss-cpu
 python-dotenv
-litellm
+pillow
+google-generativeai
