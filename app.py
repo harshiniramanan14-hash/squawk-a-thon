@@ -1,5 +1,3 @@
- app.py
-
 import streamlit as st
 from brain import get_rag_context, crew_ai_response
 
@@ -38,6 +36,7 @@ breed = st.selectbox(
         "Budgerigar",
         "Macaw",
         "Lovebird",
+        "cockatoo",
         "Other"
     ]
 )
@@ -70,3 +69,4 @@ if st.button("Analyze 🧠"):
 
         st.success("Analysis Complete")
         st.markdown(response)
+
