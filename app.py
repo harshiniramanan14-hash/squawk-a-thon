@@ -8,12 +8,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- 1. VALIDATION ---
-if not os.getenv("OPENAI_API_KEY") or not os.getenv("GOOGLE_API_KEY"):
-    st.error("🚨 Missing API Keys in .env! Please check your OpenAI and Google keys.")
+# --- 1. SAFE KEY LOADING (Fixes TypeError & 401) ---
+GOOGLE_KEY = os.getenv("GOOGLE_API_KEY")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+
+if not GOOGLE_KEY or not OPENAI_KEY:
+    st.error("🚨 Missing API Keys in .env! Ensure 'GOOGLE_API_KEY' and 'OPENAI_API_KEY' are set.")
     st.stop()
 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+genai.configure(api_key=GOOGLE_KEY)
 
 # --- 2. RAINFOREST UI ---
 st.set_page_config(page_title="Squawk-A-Thon 🦜", layout="wide")
@@ -30,20 +33,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. LOGO LOADING ---
+# --- 3. LOGO LOADING (Fixes 'Logo not found') ---
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
-    # Fixed Filename logic
-    logo_path = "logo.png"
+    # Exact filename provided in your prompt
+    logo_path = "ChatGPT Image Jan 23, 2026, 07_37_38 PM.jpg"
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     st.markdown('<h1 class="main-title">🌿 Squawk-A-Thon</h1>', unsafe_allow_html=True)
 
-# --- 4. MULTIMODAL INPUTS ---
-st.write("### 🏥 Specialist Avian Diagnostic Center")
+# --- 4. MULTIMODAL DIAGNOSTIC ---
+st.write("### 🏥 Specialist Avian Consultation")
 breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie"])
-query = st.text_area("Describe the concern (e.g., feather plucking, wing drooping):")
+query = st.text_area("Describe the concern (e.g., lethargy, feather plucking, respiratory sound):")
 
+# Feature: Picture, Audio, and Video Support
 media_file = st.file_uploader("📷 Upload Evidence (Photo/Video/Audio)", type=["jpg", "jpeg", "png", "mp4", "mp3", "mov"])
 
 if media_file:
@@ -53,20 +57,20 @@ if media_file:
     elif ext in [".mp3", ".wav"]: st.audio(media_file)
 
 # --- 5. EXECUTION ---
-if st.button("RUN OPENAI + VISION DIAGNOSTIC 🌲"):
-    with st.spinner("The Rainforest Spirits are analyzing..."):
+if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
+    with st.spinner("Analyzing the rainforest echoes..."):
         try:
-            # RAG + OpenAI CrewAI
+            # RAG + OpenAI CrewAI Reasoning
             context = load_rag_chain(query)
             report = crew_ai_response(f"{query}\n\nContext: {context}", breed)
 
-            # Gemini 1.5 Flash Vision/Audio 
+            # Vision/Audio Specialist Findings (Gemini 1.5 Flash)
             vision_out = ""
             if media_file:
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 if ext in [".jpg", ".jpeg", ".png"]:
                     img = Image.open(media_file)
-                    vision_out = model.generate_content([f"Analyze this avian health image: {query}", img]).text
+                    vision_out = model.generate_content([f"Analyze this {breed} health image: {query}", img]).text
                 else:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                         tmp.write(media_file.read())
@@ -75,15 +79,12 @@ if st.button("RUN OPENAI + VISION DIAGNOSTIC 🌲"):
 
             # --- DISPLAY RESULTS ---
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
-            st.subheader("📋 Specialist Diagnostic Report (GPT-4o)")
+            st.subheader("📋 Specialist Diagnostic Report")
             st.write(report)
             if vision_out:
                 st.markdown("---")
-                st.write("**🎬 Vision/Audio Analysis (Gemini 1.5 Flash):**")
+                st.write("**🎬 Vision/Audio Observations:**")
                 st.write(vision_out)
             st.markdown('</div>', unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Analysis Failed: {e}")
-
-st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
-
