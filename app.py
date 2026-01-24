@@ -70,7 +70,6 @@ response = crew_ai_response(
     breed
 )
 
-            )
 
         st.success("Analysis Complete")
         st.markdown(response)
