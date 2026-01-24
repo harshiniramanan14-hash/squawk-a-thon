@@ -35,7 +35,7 @@ st.markdown("""
 
 # --- 3. LOGO LOADING ---
 # If your logo isn't appearing, ensure the filename is EXACT or rename it to logo.png
-LOGO_FILENAME = "ChatGPT Image Jan 23, 2026, 07_37_38 PM.png"
+LOGO_FILENAME = "logo.png"
 
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
@@ -96,3 +96,4 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
                 st.error(f"Logic Error: {e}. Check if brain.py is correctly set up.")
 
 st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
+
