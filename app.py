@@ -41,7 +41,7 @@ if st.sidebar.button("Update Knowledge Base"):
 
 # --- 4. DIAGNOSTIC CENTER ---
 st.write("### 🏥 Specialist Consultation")
-breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie"])
+breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie","cockatoo","other"])
 symptoms = st.text_area("Describe Symptoms (e.g., Lethargy, tail bobbing)")
 user_media = st.file_uploader("📷 Upload Audio/Video Evidence", type=["mp4", "mp3", "wav"])
 
