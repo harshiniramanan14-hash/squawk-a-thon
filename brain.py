@@ -45,10 +45,18 @@ def build_or_load_vector_db():
         chunk_overlap=100
     )
 
-    chunks = splitter.split_documents(documents)
+  chunks = splitter.split_documents(documents)
 
-    db = FAISS.from_documents(chunks, embeddings)
-    db.save_local(VECTOR_DB_PATH)
+# 🔒 SAFETY CHECK
+if len(chunks) == 0:
+    raise ValueError(
+        "No documents found for RAG. "
+        "Please add PDF files to data/clinical_docs or data/behavioural_docs."
+    )
+
+db = FAISS.from_documents(chunks, embeddings)
+db.save_local(VECTOR_DB_PATH)
+
 
     return db
 
