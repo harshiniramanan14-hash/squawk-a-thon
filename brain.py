@@ -1,65 +1,81 @@
 import os
-from crewai import Agent, Task, Crew, Process
-from langchain_groq import ChatGroq
+from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
-from dotenv import load_dotenv
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import TextLoader
+from crewai import Agent, Task, Crew
+from litellm import completion
 
 load_dotenv()
 
-# Securely load keys to prevent TypeError
-groq_key = os.getenv("GROQ_API_KEY")
-llm = ChatGroq(model_name="llama3-70b-8192", groq_api_key=groq_key)
-hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 
-class AvianSpecialistCrew:
-    def __init__(self, db_path="avian_knowledge_db"):
-        self.db_path = db_path
-        
-    def get_context(self, query):
-        if os.path.exists(self.db_path):
-            db = FAISS.load_local(self.db_path, hf_embeddings, allow_dangerous_deserialization=True)
-            docs = db.similarity_search(query, k=3)
-            return "\n".join([d.page_content for d in docs])
-        return "No clinical documents found. Using general knowledge."
+# -------------------------------
+# RAG SETUP
+# -------------------------------
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
-    def run_diagnostic(self, breed, symptoms):
-        context = self.get_context(f"{breed} {symptoms}")
-        
-        # Agent 1: Clinical Pathologist
-        pathologist = Agent(
-            role='Avian Pathologist',
-            goal=f'Analyze symptoms for a {breed} based on context: {context}',
-            backstory='Expert in avian diseases and clinical markers.',
-            llm=llm,
-            verbose=True
-        )
+def build_vectorstore(docs):
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_documents(docs)
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    return vectorstore
 
-        # Agent 2: Behaviorist 
-        behaviorist = Agent(
-            role='Avian Ethologist',
-            goal='Interpret behavioral anomalies and stress signals.',
-            backstory='Specialist in parrot psychology and environmental stress.',
-            llm=llm,
-            verbose=True
-        )
+# -------------------------------
+# CREW AI AGENTS
+# -------------------------------
+avian_vet = Agent(
+    role="Avian Veterinarian",
+    goal="Diagnose and suggest healthcare guidance for birds",
+    backstory="Expert in avian diseases, nutrition, and symptoms.",
+    verbose=True
+)
 
-        task = Task(
-            description=f"Analyze the {breed} showing {symptoms}. Cross-reference with clinical data.",
-            expected_output="A structured report: Potential Issues, Behavioral Root, and 3 Recovery Steps.",
-            agent=pathologist
-        )
+avian_behaviorist = Agent(
+    role="Avian Behavior Analyst",
+    goal="Understand bird behavior and emotional state",
+    backstory="Specialist in bird psychology and behavioral patterns.",
+    verbose=True
+)
 
-        crew = Crew(agents=[pathologist, behaviorist], tasks=[task], process=Process.sequential)
-        return crew.kickoff()
+# -------------------------------
+# MAIN AI LOGIC
+# -------------------------------
+def squawk_ai(query, breed, vectorstore):
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    context_docs = retriever.get_relevant_documents(query)
+    context = "\n".join([doc.page_content for doc in context_docs])
 
-def update_db(texts, db_path="avian_knowledge_db"):
-    splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    docs = splitter.create_documents(texts)
-    if os.path.exists(db_path):
-        db = FAISS.load_local(db_path, hf_embeddings, allow_dangerous_deserialization=True)
-        db.add_documents(docs)
-    else:
-        db = FAISS.from_documents(docs, hf_embeddings)
-    db.save_local(db_path)
+    vet_task = Task(
+        description=f"""
+        Bird Breed: {breed}
+        User Concern: {query}
+
+        Context:
+        {context}
+
+        Give health analysis, causes, and care advice.
+        """,
+        agent=avian_vet
+    )
+
+    behavior_task = Task(
+        description=f"""
+        Bird Breed: {breed}
+        User Concern: {query}
+
+        Analyze emotional and behavioral patterns.
+        """,
+        agent=avian_behaviorist
+    )
+
+    crew = Crew(
+        agents=[avian_vet, avian_behaviorist],
+        tasks=[vet_task, behavior_task]
+    )
+
+    result = crew.kickoff()
+    return result
