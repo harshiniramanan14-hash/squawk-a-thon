@@ -5,7 +5,6 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.chains import RetrievalQA
 from langchain.llms import HuggingFaceHub
 
 from crewai import Agent, Task, Crew
@@ -17,19 +16,25 @@ load_dotenv()
 VECTOR_DB_PATH = "vector_db"
 
 def load_rag_chain():
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-    # Check if DB exists, if not, create an empty or placeholder one
-    if os.path.exists(VECTOR_DB_PATH):
-        db = FAISS.load_local(VECTOR_DB_PATH, embeddings, allow_dangerous_deserialization=True)
-    else:
-        # Placeholder for hackathon demo if no files are pre-loaded
-        db = FAISS.from_texts(["Initial knowledge base: Birds need fresh water and seeds."], embeddings)
-        
-    # Use Groq for the main logic (much faster than T5 for a hackathon)
-    llm = ChatGroq(temperature=0.2, model_name="llama3-70b-8192", groq_api_key=os.getenv("GROQ_API_KEY"))
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-    return RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=db.as_retriever())
+    db = FAISS.load_local(
+        VECTOR_DB_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+
+    retriever = db.as_retriever(search_kwargs={"k": 4})
+
+    llm = HuggingFaceHub(
+        repo_id="google/flan-t5-large",
+        huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY")
+    )
+
+    return retriever, llm
+
 
 def crew_ai_response(query, breed):
     llm = ChatGroq(temperature=0.3, model_name="llama3-70b-8192", groq_api_key=os.getenv("GROQ_API_KEY"))
