@@ -6,7 +6,6 @@ from PIL import Image
 import tempfile
 from dotenv import load_dotenv
 import time
-import json
 
 load_dotenv()
 
@@ -54,6 +53,7 @@ st.markdown("""
 .agent-card { background: rgba(30, 60, 90, 0.3); padding: 15px; border-radius: 10px; margin: 10px 0; }
 .emergency-card { background: rgba(255, 50, 50, 0.2); padding: 15px; border-radius: 10px; border-left: 5px solid #ff4444; }
 .progress-container { background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; }
+.agent-status { color: #4ade80; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -173,6 +173,7 @@ if media_file:
 
 # --- 6. DIAGNOSTIC EXECUTION ---
 st.markdown("---")
+
 if st.button("🚀 LAUNCH MULTI-AGENT DIAGNOSIS", type="primary", use_container_width=True):
     
     if not query or len(query.strip()) < 10:
@@ -313,4 +314,120 @@ if st.button("🚀 LAUNCH MULTI-AGENT DIAGNOSIS", type="primary", use_container_
     with col2:
         st.markdown("""
         #### 🔄 Follow-up Timeline
-        - **4 hours:**
+        - **4 hours:** Reassess critical parameters
+        - **12 hours:** Evaluate intervention effectiveness
+        - **24 hours:** Decide on veterinary consultation
+        - **48 hours:** Full case review
+        """)
+    
+    # Emergency Section
+    if severity in ["Severe", "Critical"]:
+        st.markdown("---")
+        st.markdown("### ⚠️ EMERGENCY PROTOCOL")
+        st.markdown('<div class="emergency-card">', unsafe_allow_html=True)
+        st.markdown(f"""
+        ## 🚨 URGENT ACTION REQUIRED - {severity.upper()} CASE
+        
+        **Immediate Stabilization:**
+        1. **Isolate** in quiet, warm (85°F) area
+        2. **Hydrate** with electrolyte solution
+        3. **Monitor** breathing, consciousness, position
+        4. **Prepare** for emergency transport
+        
+        **Contact Resources:**
+        - **Emergency Hotline:** 1-800-AVIAN-VET (1-800-284-2683)
+        - **Poison Control:** (888) 426-4435
+        - **Nearest Avian ER:** [Find at aav.org](https://www.aav.org/)
+        
+        **Do NOT delay veterinary care for severe/critical cases.**
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Download Report
+    report_content = f"""
+    SQUAWK-A-THON CREWAI DIAGNOSTIC REPORT
+    ======================================
+    Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}
+    Breed: {breed}
+    Severity: {severity}
+    Case ID: {hash(f"{breed}{query}") % 1000000}
+    
+    SYMPTOM DESCRIPTION:
+    {query}
+    
+    DIAGNOSTIC ANALYSIS:
+    {diagnosis}
+    
+    MEDIA ANALYSIS:
+    {media_analysis if media_analysis else 'No media analysis performed'}
+    
+    ACTION PLAN:
+    {'URGENT VETERINARY ATTENTION REQUIRED' if severity in ['Severe', 'Critical'] else 'Monitor and implement recommendations'}
+    
+    DIAGNOSTIC TEAM:
+    - Chief Avian Veterinarian
+    - Avian Behavior Specialist
+    - Avian Nutritionist
+    - Emergency Care Coordinator
+    
+    DISCLAIMER:
+    This AI-generated report is for informational purposes only.
+    Always consult with a certified avian veterinarian.
+    """
+    
+    st.download_button(
+        "📥 Download Complete Report",
+        data=report_content,
+        file_name=f"squawkathon_report_{breed.replace(' ', '_')}_{time.strftime('%Y%m%d_%H%M')}.txt",
+        mime="text/plain"
+    )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 7. SIDE INFO ---
+with st.sidebar:
+    st.markdown("## 🔧 System Status")
+    
+    if st.session_state.openai_available:
+        st.success("✅ CrewAI System: Operational")
+    else:
+        st.error("❌ CrewAI System: API Key Missing")
+        st.info("Add OPENAI_API_KEY to .env file")
+    
+    if st.session_state.gemini_available:
+        st.success("✅ Media Analysis: Available")
+    else:
+        st.warning("⚠️ Media Analysis: Limited")
+        st.info("Add GOOGLE_API_KEY for full analysis")
+    
+    st.markdown("---")
+    st.markdown("## 🦜 About This System")
+    st.markdown("""
+    **Squawk-a-Thon CrewAI** uses a multi-agent system:
+    
+    1. **Specialized Agents** - Each with unique expertise
+    2. **Collaborative Analysis** - Agents work together
+    3. **RAG Knowledge** - Medical database integration
+    4. **Query-Specific Responses** - Tailored to each case
+    
+    The system analyzes your specific query and provides comprehensive avian health guidance.
+    """)
+    
+    st.markdown("---")
+    st.markdown("## 📚 Resources")
+    st.markdown("""
+    - [Association of Avian Veterinarians](https://www.aav.org/)
+    - [Avian First Aid Guide](https://www.aav.org/page/FirstAid)
+    - [Parrot Nutrition](https://lafeber.com/pet-birds/)
+    - [Emergency Hotline: 1-800-AVIAN-VET](tel:1-800-284-2683)
+    """)
+
+# --- 8. FOOTER ---
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #aaa; font-size: 0.9em; padding: 20px;'>
+<p><strong>🦜 Squawk-a-Thon CrewAI Diagnostic System</strong></p>
+<p>Powered by CrewAI multi-agent technology | Generates query-specific diagnostic reports</p>
+<p><em>This tool provides AI-generated analysis only. Always consult a certified avian veterinarian for medical care.</em></p>
+</div>
+""", unsafe_allow_html=True)
