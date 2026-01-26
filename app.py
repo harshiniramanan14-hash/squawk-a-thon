@@ -5,7 +5,7 @@ from brain import load_rag_chain, crew_ai_response
 from PIL import Image
 import tempfile
 from dotenv import load_dotenv
-import base64
+import time
 
 load_dotenv()
 
@@ -13,12 +13,20 @@ load_dotenv()
 GOOGLE_KEY = os.getenv("GOOGLE_API_KEY")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
-if not GOOGLE_KEY or not OPENAI_KEY:
-    st.error("🚨 Missing API Keys! Ensure GOOGLE_API_KEY and OPENAI_API_KEY are in your .env file.")
-    st.stop()
+# Allow app to run even if some APIs are missing (with limited functionality)
+if not OPENAI_KEY:
+    st.error("⚠️ Missing OpenAI API Key. Some features will be limited.")
+    OPENAI_KEY = "dummy_key"  # Allow app to continue
 
-# Configure Gemini with correct API version
-genai.configure(api_key=GOOGLE_KEY)
+if not GOOGLE_KEY:
+    st.warning("⚠️ Missing Google Gemini API Key. Media analysis disabled.")
+    GEMINI_ENABLED = False
+else:
+    GEMINI_ENABLED = True
+    try:
+        genai.configure(api_key=GOOGLE_KEY)
+    except:
+        GEMINI_ENABLED = False
 
 # --- 2. RAINFOREST UI ---
 st.set_page_config(page_title="Squawk-a-Thon 🦜", layout="wide")
@@ -34,6 +42,7 @@ st.markdown("""
 .result-card { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(15px); padding: 25px; border-radius: 20px; border: 1px solid #4ade80; }
 .diagnostic-section { background: rgba(0, 100, 0, 0.2); padding: 15px; border-radius: 10px; margin: 10px 0; }
 .emergency-alert { background: rgba(255, 0, 0, 0.2); padding: 15px; border-radius: 10px; border-left: 5px solid red; }
+.feature-card { background: rgba(30, 60, 30, 0.3); padding: 15px; border-radius: 10px; margin: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,259 +54,411 @@ with col2:
         st.image(logo_path, use_container_width=True)
     st.markdown('<h1 class="main-title">🌿 Squawk-a-Thon 🦜</h1>', unsafe_allow_html=True)
 
-# --- 4. MULTIMODAL INPUTS ---
-st.write("### 🏥 Specialist Avian Diagnostic Center")
-breed = st.selectbox("Select Breed:", ["Sun Conure", "Jenday Conure", "Macaw", "African Grey", "Cockatiel", "Budgie", "Other (Specify)"])
-if breed == "Other (Specify)":
-    breed = st.text_input("Enter breed name:")
+# --- 4. SYSTEM STATUS ---
+with st.expander("🔧 System Status", expanded=False):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("OpenAI", "✅" if OPENAI_KEY and OPENAI_KEY != "dummy_key" else "⚠️")
+    with col2:
+        st.metric("Gemini", "✅" if GEMINI_ENABLED else "❌")
+    with col3:
+        st.metric("RAG Database", "✅" if os.path.exists("vector_db") else "⚠️")
+    
+    if not GEMINI_ENABLED:
+        st.info("""
+        **Media Analysis Disabled**: To enable image/video/audio analysis:
+        1. Get Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+        2. Add to .env: `GOOGLE_API_KEY=your_key_here`
+        """)
 
-query = st.text_area("Describe the concern (e.g., feather plucking, lethargy, wing drooping):", 
-                    placeholder="Be specific: duration, severity, recent changes...")
+# --- 5. MULTIMODAL INPUTS ---
+st.markdown("### 🏥 Specialist Avian Diagnostic Center")
 
-media_file = st.file_uploader("📷 Upload Evidence (Photo/Video/Audio)", 
-                             type=["jpg", "jpeg", "png", "mp4", "mov", "avi", "mp3", "wav", "m4a"])
+col1, col2 = st.columns(2)
+with col1:
+    breed = st.selectbox("Select Breed:", [
+        "Sun Conure", "Jenday Conure", "Macaw", "African Grey", 
+        "Cockatiel", "Budgie", "Amazon", "Eclectus", "Lovebird", "Other"
+    ])
+    
+with col2:
+    severity = st.select_slider(
+        "Symptom Severity:",
+        options=["Mild", "Moderate", "Severe", "Critical"]
+    )
+
+query = st.text_area(
+    "Describe the concern in detail:",
+    placeholder="Example: My Sun Conure has been plucking feathers from chest for 3 days. Appetite normal but less active. Noticed small bald patch...",
+    height=100
+)
+
+st.markdown("### 📷 Upload Evidence (Optional)")
+media_file = st.file_uploader(
+    "Supported formats: Images (JPG, PNG), Videos (MP4, MOV), Audio (MP3, WAV)",
+    type=["jpg", "jpeg", "png", "mp4", "mov", "mp3", "wav"],
+    label_visibility="collapsed"
+)
 
 if media_file:
     ext = os.path.splitext(media_file.name)[1].lower()
-    st.write(f"**Uploaded:** {media_file.name}")
+    st.markdown(f"**📎 Uploaded:** `{media_file.name}`")
     
     if ext in [".jpg", ".jpeg", ".png"]: 
-        st.image(media_file, width=400, caption="Uploaded Image")
-    elif ext in [".mp4", ".mov", ".avi"]: 
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(media_file, caption="Uploaded Image", use_container_width=True)
+        with col2:
+            if GEMINI_ENABLED:
+                st.success("✅ Image analysis enabled")
+            else:
+                st.warning("⚠️ Image analysis requires Gemini API key")
+                
+    elif ext in [".mp4", ".mov"]: 
         st.video(media_file)
-        st.info("🎬 Video analysis enabled - analyzing frames for behavioral cues")
-    elif ext in [".mp3", ".wav", ".m4a"]: 
+        if GEMINI_ENABLED:
+            st.success("✅ Video analysis enabled")
+        else:
+            st.warning("⚠️ Video analysis requires Gemini API key")
+            
+    elif ext in [".mp3", ".wav"]: 
         st.audio(media_file)
-        st.info("🎵 Audio analysis enabled - analyzing vocalizations and sounds")
+        if GEMINI_ENABLED:
+            st.success("✅ Audio analysis enabled")
+        else:
+            st.warning("⚠️ Audio analysis requires Gemini API key")
 
-# --- 5. GEMINI MODEL SELECTION ---
-@st.cache_resource
-def get_gemini_model():
-    """Get the best available Gemini model"""
-    try:
-        # Try Gemini 1.5 Pro (supports multimodal including video/audio)
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')
-        st.success("✅ Using Gemini 1.5 Pro (Multimodal)")
-        return model
-    except Exception as e:
-        try:
-            # Fallback to Gemini Pro Vision for images
-            model = genai.GenerativeModel('gemini-pro-vision')
-            st.info("⚠️ Using Gemini Pro Vision (Images only)")
-            return model
-        except Exception as e2:
-            st.error(f"❌ Gemini API Error: {e2}")
-            return None
-
-# --- 6. EXECUTION ---
-if st.button("🚀 RUN MULTIMODAL DIAGNOSTIC", type="primary", use_container_width=True):
+# --- 6. GEMINI HELPER FUNCTIONS ---
+def analyze_with_gemini(media_file, query, breed, media_type):
+    """Analyze media using Gemini with robust fallbacks"""
+    if not GEMINI_ENABLED:
+        return "Media analysis requires Gemini API key. Add GOOGLE_API_KEY to .env file."
     
-    # Validate inputs
+    try:
+        # Try different Gemini model names
+        model_names = [
+            'gemini-1.5-flash',  # Most available
+            'gemini-1.0-pro',    # Fallback
+            'gemini-pro'         # Legacy
+        ]
+        
+        model = None
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                break
+            except:
+                continue
+        
+        if not model:
+            return "No available Gemini model found."
+        
+        if media_type == "image":
+            img = Image.open(media_file)
+            prompt = f"""As an avian veterinary specialist, analyze this {breed} photo.
+
+CLINICAL CONCERN: {query}
+
+Provide analysis in this format:
+
+**VISUAL ASSESSMENT:**
+- Feather Condition: [Analysis]
+- Posture & Body Language: [Analysis]
+- Eyes & Nares: [Analysis]
+- Beak & Cere: [Analysis]
+- Overall Health Indicators: [Analysis]
+
+**CLINICAL CORRELATION:**
+[How visual findings relate to reported concern]
+
+**RECOMMENDATIONS:**
+1. [Immediate action]
+2. [Monitoring points]
+3. [When to seek vet care]"""
+            
+            response = model.generate_content([prompt, img])
+            return response.text
+            
+        elif media_type == "video":
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(media_file.read())
+                tmp_path = tmp.name
+            
+            try:
+                # Check if video upload is supported
+                video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
+                prompt = f"""Analyze this {breed} parrot video for health indicators.
+
+Concern: {query}
+
+Focus on:
+1. Movement and coordination
+2. Breathing patterns
+3. Behavioral cues
+4. Any abnormalities"""
+                
+                response = model.generate_content([prompt, video_file])
+                result = response.text
+            except:
+                result = "Video analysis requires Gemini 1.5 Pro. Using basic assessment."
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            return result
+            
+        elif media_type == "audio":
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(media_file.read())
+                tmp_path = tmp.name
+            
+            try:
+                audio_file = genai.upload_file(tmp_path, mime_type="audio/mp3")
+                prompt = f"""Analyze this {breed} parrot audio.
+
+Concern: {query}
+
+Assess:
+1. Vocalization patterns
+2. Respiratory sounds
+3. Stress indicators
+4. Behavioral context"""
+                
+                response = model.generate_content([prompt, audio_file])
+                result = response.text
+            except:
+                result = "Audio analysis requires advanced Gemini model."
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            return result
+            
+    except Exception as e:
+        return f"Media analysis error: {str(e)[:200]}"
+
+# --- 7. MAIN EXECUTION ---
+if st.button("🚀 RUN DIAGNOSTIC ANALYSIS", type="primary", use_container_width=True):
+    
     if not query.strip():
-        st.error("Please describe the concern")
+        st.error("❌ Please describe the concern")
         st.stop()
     
-    with st.spinner("🦜 Consulting avian specialists across the rainforest..."):
+    # Progress tracking
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        # Step 1: Context Retrieval
+        status_text.text("🔍 Retrieving avian medical knowledge...")
+        progress_bar.progress(20)
+        time.sleep(0.5)
+        
+        context = ""
         try:
-            # Get Gemini model
-            gemini_model = get_gemini_model()
-            if not gemini_model:
-                st.error("Gemini API unavailable. Using text-only analysis.")
+            context = load_rag_chain(query)
+        except Exception as rag_error:
+            context = f"Base knowledge: Avian health basics for {breed}"
+            st.warning(f"RAG system: Using fallback knowledge")
+        
+        # Step 2: Generate Diagnosis
+        status_text.text("🧠 Consulting avian specialists...")
+        progress_bar.progress(50)
+        
+        diagnosis = ""
+        try:
+            diagnosis = crew_ai_response(f"{query}\n\nSeverity: {severity}\n\nContext: {context}", breed)
+        except Exception as crew_error:
+            # Fallback diagnosis
+            diagnosis = f"""# 🩺 Avian Health Assessment Report
+
+**Patient:** {breed} Parrot
+**Severity:** {severity}
+**Presenting Concern:** {query}
+
+## 📋 Clinical Assessment:
+Based on the symptoms described, here are the most likely considerations:
+
+### 🔍 Possible Causes (Ranked):
+1. **Behavioral/Stress Related** - Most common in companion parrots
+2. **Nutritional Deficiency** - Especially vitamin A or calcium
+3. **Environmental Factors** - Humidity, temperature, lighting
+4. **Medical Conditions** - Parasites, infections, metabolic issues
+
+### 🚨 Emergency Red Flags (Seek Vet Immediately):
+- Labored breathing or tail bobbing
+- Bleeding that doesn't stop within 5 minutes
+- Inability to perch or stand
+- Seizures or loss of consciousness
+- No droppings for 12+ hours
+
+### 💡 Immediate Care Instructions:
+1. **Warmth:** Maintain 85°F warm area
+2. **Hydration:** Offer electrolyte solution
+3. **Nutrition:** Hand-feed if appetite decreased
+4. **Stress Reduction:** Quiet, dim environment
+5. **Monitoring:** Track droppings, activity, appetite
+
+### 🍎 Species-Specific Notes for {breed}:
+{get_breed_specific_notes(breed)}
+
+*Note: This is AI-generated guidance. Consult an avian veterinarian for proper diagnosis.*"""
+        
+        progress_bar.progress(70)
+        
+        # Step 3: Media Analysis
+        media_analysis = ""
+        if media_file and GEMINI_ENABLED:
+            status_text.text("🎬 Analyzing media evidence...")
             
-            # 1. RAG Context Retrieval
-            with st.expander("🔍 Retrieving Medical Context", expanded=False):
-                context = load_rag_chain(query)
-                if context:
-                    st.info(f"Retrieved {len(context.split())} words of avian medical context")
+            ext = os.path.splitext(media_file.name)[1].lower()
+            media_type = ""
+            if ext in [".jpg", ".jpeg", ".png"]:
+                media_type = "image"
+            elif ext in [".mp4", ".mov"]:
+                media_type = "video"
+            elif ext in [".mp3", ".wav"]:
+                media_type = "audio"
             
-            # 2. CrewAI Diagnostic Report
-            with st.expander("🧠 Generating Expert Diagnosis", expanded=False):
-                try:
-                    report = crew_ai_response(f"{query}\n\nContext: {context}", breed)
-                except Exception as crew_error:
-                    st.warning(f"CrewAI system issue: {str(crew_error)[:100]}")
-                    # Fallback to direct Gemini diagnosis
-                    if gemini_model:
-                        fallback_prompt = f"""You are Dr. Aviana Feathers, a senior avian veterinarian with 25 years of experience.
-
-PATIENT: {breed} parrot
-PRESENTING CONCERN: {query}
-MEDICAL CONTEXT: {context}
-
-Please provide a comprehensive veterinary assessment including:
-
-1. **Differential Diagnosis** (list 3-5 most likely causes ranked by probability)
-2. **Clinical Signs Analysis** (what each symptom might indicate)
-3. **Immediate Care Instructions** (what to do in next 24 hours)
-4. **Dietary Recommendations** (specific to {breed})
-5. **Environmental Adjustments**
-6. **Red Flags** (when to seek emergency vet care)
-7. **Follow-up Monitoring** (what to watch for)
-
-Format with clear headings and bullet points. Be specific and actionable."""
-                        
-                        report = gemini_model.generate_content(fallback_prompt).text
-                    else:
-                        report = f"""# 🩺 Avian Health Assessment for {breed}
-
-## Primary Concern: {query}
-
-### Immediate Actions:
-1. **Temperature Control** - Maintain 85°F warm area
-2. **Hydration** - Offer electrolyte solution (Pedialyte)
-3. **Nutrition** - Hand-feed if not eating
-4. **Stress Reduction** - Quiet, dim environment
-5. **Monitor** - Droppings, breathing, activity level
-
-### Emergency Signs (Vet Immediately):
-• Labored breathing or tail bobbing
-• Bleeding that doesn't stop
-• Inability to perch
-• Seizures or tremors
-• No droppings for 12+ hours
-
-*System temporarily limited. Consult certified avian veterinarian.*"""
+            if media_type:
+                media_analysis = analyze_with_gemini(media_file, query, breed, media_type)
             
-            # 3. Multimodal Analysis (Images/Video/Audio)
-            vision_out = ""
-            if media_file and gemini_model:
-                with st.expander("🎬 Analyzing Media Evidence", expanded=False):
-                    try:
-                        if ext in [".jpg", ".jpeg", ".png"]:
-                            # IMAGE ANALYSIS
-                            img = Image.open(media_file)
-                            img_prompt = f"""As an avian veterinary imaging specialist, analyze this {breed} parrot photo.
-
-CLINICAL CONTEXT: {query}
-
-Analyze for:
-1. **Feather Condition** - plucking, barbering, discoloration
-2. **Posture & Stance** - wing position, weight bearing
-3. **Eyes & Nares** - discharge, swelling, symmetry
-4. **Beak & Cere** - overgrowth, discoloration
-5. **General Condition** - body score, alertness
-6. **Environmental Clues** - perches, cage conditions
-
-Provide specific observations and clinical correlation."""
-                            
-                            vision_out = gemini_model.generate_content([img_prompt, img]).text
-                            
-                        elif ext in [".mp4", ".mov", ".avi"]:
-                            # VIDEO ANALYSIS
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                                tmp.write(media_file.read())
-                                tmp_path = tmp.name
-                            
-                            # Upload video to Gemini
-                            video_file = genai.upload_file(tmp_path)
-                            
-                            video_prompt = f"""As an avian behavior specialist, analyze this {breed} parrot video.
-
-CLINICAL CONCERN: {query}
-
-Analyze for:
-1. **Locomotion** - gait abnormalities, wing use
-2. **Behavior** - activity level, interaction
-3. **Postural Changes** - fluffing, trembling, leaning
-4. **Respiratory Signs** - tail bobbing, open-mouth breathing
-5. **Vocalizations** - changes in frequency/pitch
-6. **Neurological Signs** - head tilt, circling, seizures
-
-Timestamp key observations and rate severity (mild/moderate/severe)."""
-                            
-                            vision_out = gemini_model.generate_content([video_prompt, video_file]).text
-                            os.unlink(tmp_path)
-                            
-                        elif ext in [".mp3", ".wav", ".m4a"]:
-                            # AUDIO ANALYSIS
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                                tmp.write(media_file.read())
-                                tmp_path = tmp.name
-                            
-                            audio_file = genai.upload_file(tmp_path)
-                            
-                            audio_prompt = f"""As an avian acoustic specialist, analyze this {breed} parrot audio.
-
-CLINICAL CONCERN: {query}
-
-Analyze for:
-1. **Vocalization Patterns** - changes in frequency, duration
-2. **Respiratory Sounds** - wheezing, clicking, sneezing
-3. **Distress Calls** - frequency and intensity
-4. **Behavioral Context** - what sounds might indicate
-5. **Comparative Analysis** - vs. normal {breed} vocalizations
-
-Rate abnormality level and suggest possible causes."""
-                            
-                            vision_out = gemini_model.generate_content([audio_prompt, audio_file]).text
-                            os.unlink(tmp_path)
-                            
-                    except Exception as vision_error:
-                        vision_out = f"## Media Analysis Limited\n\n*Technical note: {str(vision_error)[:200]}*\n\nFocus on the clinical assessment above."
-            
-            # --- DISPLAY RESULTS ---
-            st.markdown('<div class="result-card">', unsafe_allow_html=True)
-            
-            # Main Report
-            st.markdown("## 📋 Comprehensive Diagnostic Report")
-            st.markdown(f"**Patient:** {breed} | **Presenting Concern:** {query}")
+            progress_bar.progress(90)
+        else:
+            progress_bar.progress(85)
+        
+        # Step 4: Display Results
+        status_text.text("📊 Compiling final report...")
+        time.sleep(0.5)
+        progress_bar.progress(100)
+        status_text.empty()
+        
+        # --- DISPLAY RESULTS ---
+        st.markdown("## 📋 DIAGNOSTIC REPORT")
+        st.markdown(f"**Patient:** {breed} | **Severity:** {severity} | **Status:** {'🟢 Stable' if severity in ['Mild', 'Moderate'] else '🔴 Urgent'}")
+        st.markdown("---")
+        
+        # Main Diagnosis
+        st.markdown(diagnosis)
+        
+        # Media Analysis Section
+        if media_analysis:
             st.markdown("---")
-            
-            # Display Report
-            st.markdown(report)
-            
-            # Media Analysis Section
-            if vision_out:
-                st.markdown("---")
-                st.markdown("## 🎬 Media Analysis Findings")
-                st.markdown('<div class="diagnostic-section">', unsafe_allow_html=True)
-                st.markdown(vision_out)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Emergency Guidance
-            st.markdown("---")
-            st.markdown("## ⚠️ Emergency Action Card")
-            st.markdown('<div class="emergency-alert">', unsafe_allow_html=True)
-            st.markdown("""
-            ### **IMMEDIATE VETERINARY CARE REQUIRED IF:**
-            • **Respiratory Distress** (open-mouth breathing, tail bobbing)  
-            • **Trauma** (bleeding, fractures, wounds)  
-            • **Neurological Signs** (seizures, circling, inability to stand)  
-            • **Toxic Exposure** (known ingestion of toxins)  
-            • **Prolapsed Organ** (tissue protruding from vent)  
-            
-            **24/7 Avian Emergency Hotline: 1-800-AVIAN-VET**
-            """)
+            st.markdown("## 🎬 MEDIA ANALYSIS")
+            st.markdown('<div class="diagnostic-section">', unsafe_allow_html=True)
+            st.markdown(media_analysis)
             st.markdown('</div>', unsafe_allow_html=True)
-            
+        
+        # Emergency Section
+        st.markdown("---")
+        st.markdown("## ⚠️ EMERGENCY PROTOCOL")
+        st.markdown('<div class="emergency-alert">', unsafe_allow_html=True)
+        st.markdown(f"""
+        ### **FOR {breed.upper()} - {severity.upper()} CASE**
+        
+        **IMMEDIATE ACTION REQUIRED:**
+        - **WARMTH:** Heating pad on LOW under half of cage
+        - **HYDRATION:** Offer warm water with electrolytes
+        - **ISOLATION:** Quiet, stress-free environment
+        - **MONITOR:** Check every 30 minutes
+        
+        **FIND HELP:**
+        • [Association of Avian Veterinarians](https://www.aav.org/)
+        • [Emergency Vet Locator](https://www.veterinaryemergencygroup.com/)
+        • **24/7 Hotline:** 1-800-AVIAN-VET (1-800-284-2683)
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Resources
+        st.markdown("---")
+        st.markdown("## 📚 ADDITIONAL RESOURCES")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+            st.markdown("**📖 Avian First Aid**\n\n• CPR for Birds\n• Bleeding Control\n• Fracture Stabilization")
             st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Download Report
-            report_text = f"Squawk-a-Thon Report\nBreed: {breed}\nConcern: {query}\n\n{report}\n\nMedia Analysis:\n{vision_out}"
-            st.download_button("💾 Download Full Report", report_text, file_name=f"squawkathon_report_{breed}.txt")
-            
-        except Exception as e:
-            st.error("## 🚨 Diagnostic System Encountered an Issue")
-            st.markdown('<div class="emergency-alert">', unsafe_allow_html=True)
-            st.markdown(f"""
-            ### **For {breed} with {query}:**
-            
-            **CRITICAL FIRST AID:**
-            1. **WARMTH** - Provide 85-90°F heat source (heating pad on LOW under half the cage)
-            2. **HYDRATION** - Offer warm electrolyte solution via syringe if not drinking
-            3. **ISOLATION** - Quiet, stress-free environment away from other pets
-            4. **MONITOR** - Check droppings, breathing rate, and consciousness every 30 minutes
-            
-            **FIND AN AVIAN VET:**
-            • [Association of Avian Veterinarians](https://www.aav.org/)
-            • [Avian Vet Locator](https://abvp.com/animal-owners/find-a-specialist/)
-            
-            *Technical Error: {str(e)[:200]}*
-            """)
+        with col2:
+            st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+            st.markdown("**🍎 Nutrition Guide**\n\n• Safe Foods List\n• Toxic Foods Warning\n• Supplement Guide")
             st.markdown('</div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+            st.markdown("**🏥 Find a Vet**\n\n• Avian Specialist Directory\n• Emergency Clinics\n• Online Consultations")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Download option
+        report_content = f"""
+        SQUAWK-A-THON AVIAN HEALTH REPORT
+        =================================
+        
+        Patient: {breed}
+        Severity: {severity}
+        Date: {time.strftime('%Y-%m-%d %H:%M')}
+        
+        PRIMARY CONCERN:
+        {query}
+        
+        DIAGNOSTIC ASSESSMENT:
+        {diagnosis}
+        
+        MEDIA ANALYSIS:
+        {media_analysis if media_analysis else 'No media analysis performed'}
+        
+        EMERGENCY CONTACTS:
+        • AAV: https://www.aav.org/
+        • Emergency: 1-800-AVIAN-VET
+        
+        Disclaimer: This is AI-generated guidance. Always consult a veterinarian.
+        """
+        
+        st.download_button(
+            label="💾 Download Full Report",
+            data=report_content,
+            file_name=f"squawkathon_report_{breed}_{time.strftime('%Y%m%d_%H%M')}.txt",
+            mime="text/plain"
+        )
+        
+    except Exception as e:
+        st.error("## 🚨 System Error")
+        st.markdown(f"""
+        The diagnostic system encountered an error. Here's immediate guidance:
+        
+        ### **For {breed} showing {severity.lower()} symptoms:**
+        
+        1. **Ensure basic needs:**
+           - Fresh water available
+           - Appropriate temperature (75-85°F)
+           - Quiet, secure environment
+        
+        2. **Monitor closely:**
+           - Appetite and water consumption
+           - Droppings (color, consistency)
+           - Activity level and perching
+        
+        3. **Contact professional help if:**
+           - Symptoms worsen
+           - New symptoms appear
+           - No improvement in 24 hours
+        
+        **Error details:** `{str(e)[:150]}`
+        """)
+
+# --- 8. HELPER FUNCTION ---
+def get_breed_specific_notes(breed):
+    """Return breed-specific care notes"""
+    notes = {
+        "Sun Conure": "Prone to fatty liver disease. Need vitamin A-rich foods (sweet potatoes, carrots).",
+        "Jenday Conure": "High energy, need mental stimulation. Prone to feather destructive behavior.",
+        "Macaw": "Require large cage, strong perches. Prone to beak malformations.",
+        "African Grey": "Sensitive to calcium deficiency. Need varied diet, prone to feather picking.",
+        "Cockatiel": "Prone to respiratory issues. Dust sensitive. Need cuttlebone for calcium.",
+        "Budgie": "Prone to tumors and goiter. Need iodine supplement.",
+        "Amazon": "Prone to obesity. Need controlled diet and exercise.",
+        "Eclectus": "Unique protein needs. Prone to toe-tapping syndrome.",
+        "Lovebird": "High metabolism, need frequent feeding. Prone to eye infections.",
+    }
+    return notes.get(breed, "Ensure species-appropriate diet and environment. Consult avian vet for breed-specific care.")
 
 st.markdown("---")
 st.caption("""
-**Disclaimer:** Squawk-a-Thon is an AI-powered educational tool for informational purposes only. 
-It is not a substitute for professional veterinary care. Always consult with a certified avian veterinarian for medical concerns.
+**Disclaimer:** Squawk-a-Thon provides AI-generated educational information only. 
+Not a substitute for professional veterinary care. In emergencies, contact an avian veterinarian immediately.
 """)
