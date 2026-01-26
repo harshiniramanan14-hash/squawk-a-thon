@@ -1,3 +1,4 @@
+pip install streamlit google-generativeai pillow python-dotenv openai langchain-openai crewai
 import streamlit as st
 import os
 import google.generativeai as genai
@@ -462,3 +463,4 @@ st.caption("""
 **Disclaimer:** Squawk-a-Thon provides AI-generated educational information only. 
 Not a substitute for professional veterinary care. In emergencies, contact an avian veterinarian immediately.
 """)
+
