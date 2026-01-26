@@ -51,11 +51,13 @@ media_file = st.file_uploader("📷 Upload Evidence (Photo/Video/Audio)", type=[
 
 if media_file:
     ext = os.path.splitext(media_file.name)[1].lower()
-    if ext in [".jpg", ".jpeg", ".png"]: st.image(media_file, width=400)
-    elif ext in [".mp4", ".mov"]: st.video(media_file)
-    elif ext in [".mp3", ".wav"]: st.audio(media_file)
+    if ext in [".jpg", ".jpeg", ".png"]: 
+        st.image(media_file, width=400)
+    elif ext in [".mp4", ".mov"]: 
+        st.video(media_file)
+    elif ext in [".mp3", ".wav"]: 
+        st.audio(media_file)
 
-# --- 5. EXECUTION ---
 # --- 5. EXECUTION ---
 if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
     with st.spinner("Consulting the Rainforest Spirits..."):
@@ -88,13 +90,14 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
             # 3. Vision/Audio Analysis
             vision_out = ""
             if media_file:
-               # FIXED: Use correct model names
                 try:
-              # Try the newest model first
+                    # Try the newest model first
                     model = genai.GenerativeModel('gemini-1.5-pro')
-               except:
+                except:
                     # Fallback to more available models
-                     model = genai.GenerativeModel('gemini-pro')
+                    model = genai.GenerativeModel('gemini-pro')
+                
+                try:
                     if ext in [".jpg", ".jpeg", ".png"]:
                         img = Image.open(media_file)
                         vision_out = model.generate_content([
@@ -125,7 +128,7 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
             st.markdown('</div>', unsafe_allow_html=True)
             
         except Exception as e:
-            st.error(f"⚠️ Analysis System Busy")
+            st.error("⚠️ Analysis System Busy")
             st.info(f"""
             **Immediate Steps for {breed}:**
             1. **Isolate** if showing signs of illness
@@ -136,3 +139,5 @@ if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
             
             *Technical Issue: {str(e)[:150]}*
             """)
+
+st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
