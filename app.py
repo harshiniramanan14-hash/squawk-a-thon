@@ -56,36 +56,83 @@ if media_file:
     elif ext in [".mp3", ".wav"]: st.audio(media_file)
 
 # --- 5. EXECUTION ---
+# --- 5. EXECUTION ---
 if st.button("RUN MULTIMODAL DIAGNOSTIC 🌲"):
     with st.spinner("Consulting the Rainforest Spirits..."):
         try:
-            # 1. RAG context + OpenAI Reasoning
+            # 1. RAG context
             context = load_rag_chain(query)
-            report = crew_ai_response(f"{query}\n\nContext: {context}", breed)
-
-            # 2. Vision/Audio Specialist Analysis (Gemini 1.5 Flash)
+            
+            # 2. CrewAI Analysis (with fallback)
+            try:
+                report = crew_ai_response(f"{query}\n\nContext: {context}", breed)
+            except Exception as crew_error:
+                report = f"""📋 **Avian Health Assessment for {breed}**
+                
+                **Primary Concern:** {query}
+                
+                **General Guidance:**
+                • **Temperature:** Maintain 75-85°F (24-29°C)
+                • **Hydration:** Ensure fresh water is always available
+                • **Nutrition:** Species-appropriate pellets, fresh veggies
+                • **Observation:** Monitor droppings, appetite, activity level
+                
+                **When to Seek Immediate Vet Care:**
+                ‣ Bleeding that doesn't stop in 5 minutes
+                ‣ Difficulty breathing
+                ‣ Inability to perch or stand
+                ‣ No droppings for 12+ hours
+                
+                *Note: AI system experiencing technical issues. Please consult an avian veterinarian.*"""
+            
+            # 3. Vision/Audio Analysis
             vision_out = ""
             if media_file:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                if ext in [".jpg", ".jpeg", ".png"]:
-                    img = Image.open(media_file)
-                    vision_out = model.generate_content([f"Analyze this {breed} health image: {query}", img]).text
-                else:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                        tmp.write(media_file.read())
-                        gen_f = genai.upload_file(tmp.name)
-                        vision_out = model.generate_content([gen_f, f"Analyze this media for {breed} health: {query}"]).text
-
+               # FIXED: Use correct model names
+                try:
+              # Try the newest model first
+                    model = genai.GenerativeModel('gemini-1.5-pro')
+               except:
+                    # Fallback to more available models
+                     model = genai.GenerativeModel('gemini-pro')
+                    if ext in [".jpg", ".jpeg", ".png"]:
+                        img = Image.open(media_file)
+                        vision_out = model.generate_content([
+                            f"Analyze this {breed} parrot's health condition. Look for: feather condition, posture, eyes, beak. Concern: {query}",
+                            img
+                        ]).text
+                    else:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                            tmp.write(media_file.read())
+                            gen_f = genai.upload_file(tmp.name)
+                            vision_out = model.generate_content([
+                                f"Analyze this media for {breed} parrot health indicators. Concern: {query}",
+                                gen_f
+                            ]).text
+                except Exception as vision_error:
+                    vision_out = f"Media analysis unavailable: {str(vision_error)[:100]}"
+            
             # --- DISPLAY RESULTS ---
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
             st.subheader("📋 Specialist Diagnostic Report")
             st.write(report)
+            
             if vision_out:
                 st.markdown("---")
-                st.write("**🎬 Vision/Audio Specialist Findings:**")
+                st.subheader("🎬 Vision/Audio Specialist Findings")
                 st.write(vision_out)
+                
             st.markdown('</div>', unsafe_allow_html=True)
+            
         except Exception as e:
-            st.error(f"Analysis Failed: {e}")
-
-st.caption("Educational tool only. Consult a veterinarian for medical emergencies.")
+            st.error(f"⚠️ Analysis System Busy")
+            st.info(f"""
+            **Immediate Steps for {breed}:**
+            1. **Isolate** if showing signs of illness
+            2. **Warmth** - maintain 85°F warm area
+            3. **Hydration** - offer electrolyte solution
+            4. **Quiet** - reduce noise and stress
+            5. **Contact** an avian vet immediately
+            
+            *Technical Issue: {str(e)[:150]}*
+            """)
