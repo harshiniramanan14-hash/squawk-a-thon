@@ -31,12 +31,12 @@ st.markdown("<h3 style='text-align: center;'>AI-Powered Avian Diagnostic Termina
 
 # --- MULTIMODAL FUNCTION (From Friend's Code) ---
 def analyze_multimodal(uploaded_file, user_query, bird_species):
-    model_names = ['gemini-1.5-flash', 'gemini-1.5-pro']
-    full_prompt = f"You are Dr. Aviara, avian vet. Analyze this {bird_species} based on media + concern: '{user_query}'"
+    # Use standard models to avoid 404s
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
-    # Handle file processing
     file_ext = uploaded_file.name.split('.')[-1].lower()
     temp_path = f"temp_file.{file_ext}"
+    
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
@@ -44,18 +44,32 @@ def analyze_multimodal(uploaded_file, user_query, bird_species):
         if file_ext in ['jpg', 'jpeg', 'png', 'webp']:
             media_input = Image.open(temp_path)
         else:
+            # For Video/Audio, we MUST wait for the 'ACTIVE' state
+            st.info("📤 Uploading to Google AI...")
             genai_file = genai.upload_file(path=temp_path)
+            
+            # CRITICAL: Polling loop to wait for processing
             while genai_file.state.name == "PROCESSING":
                 time.sleep(2)
                 genai_file = genai.get_file(genai_file.name)
+            
+            if genai_file.state.name != "ACTIVE":
+                return f"❌ Media processing failed: {genai_file.state.name}"
+            
             media_input = genai_file
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content([media_input, full_prompt])
+        # Generate content with a specific timeout to prevent the crash in your image
+        response = model.generate_content(
+            [media_input, f"Diagnose this {bird_species}: {user_query}"],
+            request_options={"timeout": 600} # Increased timeout to 10 minutes
+        )
         return response.text
-    finally:
-        if os.path.exists(temp_path): os.remove(temp_path)
 
+    except Exception as e:
+        return f"❌ Multimodal Error: {str(e)}"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 # --- MAIN UI ---
 col1, col2 = st.columns([1, 1.2])
 
@@ -100,3 +114,4 @@ with st.sidebar:
     st.success("Gemini Vision: Active")
     st.markdown("---")
     st.warning("⚠️ **Disclaimer:** This tool is for educational purposes. Consult a vet for emergencies.")
+
